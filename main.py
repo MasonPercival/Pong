@@ -48,6 +48,17 @@ class PongGame(Widget):
         self.player1.bounce_ball(self.ball)
         self.player2.bounce_ball(self.ball)
 
+    def update(self, dt):
+        # call ball.move and other stuff
+        pass
+
+class PongApp(App):
+
+    def build(self):
+        game = PongGame()
+        Clock.schedule_interval(game.update, 1.0/60.0)
+        return game
+
     def on_touch_move(self, touch):
         if touch.x < self.width / 1 / 4:
             self.player1.center_y = touch.y
@@ -63,4 +74,5 @@ class PongApp(App):
         return game
 
 
-PongApp().run()
+if __name__ == '__main__':
+    PongApp().run()
