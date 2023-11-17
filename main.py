@@ -1,17 +1,33 @@
-from random import randiant, randint
 from kivy.app import App
-from kivy.clock import Clock
-from kivy.properties import NumericProperty, ReferenceListProperty, ObjectProperty
 from kivy.uix.widget import Widget
+from kivy.properties import NumericProperty, ReferenceListProperty,\
+    ObjectProperty, StringProperty
 from kivy.vector import Vector
+from kivy.clock import Clock
+from kivy.core.window import Window
+from time import sleep
+import sys
 
+#pyuserinput is not required, as well as not working with kivy code in python 3.4
+"""
+try:
+    from pykeyboard import PyKeyboard
+except ImportError:
+    sys.exit("You need to install pykeyboard. Install it by running 'pip install pyuserinput'")
+
+kb = PyKeyboard()"""
+auto_mode = 1
 
 class PongPaddle(Widget):
     score = NumericProperty(0)
 
     def bounce_ball(self, ball):
         if self.collide_widget(ball):
-            ball.velocity_x *= -1.1
+            vx, vy = ball.velocity
+            offset = (ball.center_y - self.center_y) / (self.height / 2)
+            bounced = Vector(-1 * vx, vy)
+            vel = bounced * 1.1
+            ball.velocity = vel.x, vel.y + offset
 
 class PongBall(Widget):
     velocity_x = NumericProperty(0)
@@ -23,56 +39,145 @@ class PongBall(Widget):
 
 
 class PongGame(Widget):
+    game_over = False
+    result = StringProperty('')
     ball = ObjectProperty(None)
     player1 = ObjectProperty(None)
-    Player2 = ObjectProperty(None)
+    player2 = ObjectProperty(None)
+    motion = 10
+    
+    def __init__(self, **kwargs):
+        super(PongGame, self).__init__(**kwargs)
+        self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
+        self._keyboard.bind(on_key_down = self._on_keyboard_down)
+        self._keyboard.bind(on_key_up = self._on_keyboard_up)
 
-    def serve_ball(self):
-        self.ball.velocity = Vector(4, 0).rotate(randint(0, 360))
-    def update(self, dt):
+    def _keyboard_closed(self):
+        self._keyboard.unbind(on_key_down = self._on_keyboard_down)
+        self._keyboard.unbind(on_key_up = self._on_keyboard_up)
+        self._keyboard = None
+
+    def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
+        if keycode[1] == 'w':
+            self.player1.center_y += self.motion
+            self.motion += 2
+            if self.player1.center_y > self.height:
+                self.player1.center_y = self.height
+        if keycode[1] == "s":
+            self.player1.center_y -= self.motion
+            self.motion += 2
+            if self.player1.center_y < 0:
+                self.player1.center_y = 0
+        if keycode[1] == "up":
+            self.player2.center_y += self.motion
+            self.motion += 2
+            if self.player2.center_y > self.height:
+                self.player2.center_y = self.height
+        if keycode[1] == "down":
+            self.player2.center_y -= self.motion
+            self.motion += 2
+            if self.player2.center_y < 0:
+                self.player2.center_y = 0
+        return True
+
+    def _on_keyboard_up(self, keyboard, keycode):
+	    self.motion = 10
+        return True
+
+
+    def serve_ball(self, vel=(4, 0)):
+        self.ball.center = self.center
+        self.ball.velocity = vel
+        sleep(0.1)
+
+    def update(self,dt):
         self.ball.move()
 
-        # bounce off top and bottom
-        if (self.ball.y < 0) or (self.ball.y > self.height - 50):
-            self.ball.velocity_y *= -1
-
-        # bounce off left and increase the score
-        if self.ball.x < 0:
-            self.ball.velocity_x *= -1
-            self.player1.score +=1
-        # bounce off right
-        if self.ball.x > self.width - 50:
-            self.ball.velocity_x *= -1
-            self.player2.score += 1
-
+        # bounce of paddles
         self.player1.bounce_ball(self.ball)
         self.player2.bounce_ball(self.ball)
 
-    def update(self, dt):
-        # call ball.move and other stuff
-        pass
+        """if (auto_mode == 1 and self.ball.velocity_x > 0 and abs(self.player1.center_y - self.height//2) > 10):
+            if (self.player1.center_y < self.height//2):
+                self.player1.center_y += self.motion
+                self.motion += 2
+                if self.player1.center_y > self.height:
+                        self.player1.center_y = self.height
+                #kb.press_key('w')
+                #kb.release_key('w')
+            else:
+                self.player1.center_y -= self.motion
+                self.motion += 2
+                if self.player1.center_y < 0:
+                        self.player1.center_y = 0
+                #kb.press_key('s')
+                #kb.release_key('s')"""
 
-class PongApp(App):
+    if (auto_mode == 1 and self.ball.velocity_x < 0):
+            if(abs(self.player1.center_y - self.ball.center_y) > 10):
+                if (self.player1.center_y < self.ball.center_y):
+                    self.player1.center_y += self.motion
+                    self.motion += 2
+    if self.player1.center_y > self.height: # checking if paddle goes above max height
+                        self.player1.center_y = self.height
+                    #kb.press_key('w')
+                    #kb.release_key('w')
+    else:
+		    self.player1.center_y -= self.motion
+self.motion += 2
+if self.player1.center_y < 0: # if paddle goes below zero
+                        self.player1.center_y = 0
+                    #kb.press_key('s')
+                    #kb.release_key('s')
 
-    def build(self):
-        game = PongGame()
-        Clock.schedule_interval(game.update, 1.0/60.0)
-        return game
 
-    def on_touch_move(self, touch):
-        if touch.x < self.width / 1 / 4:
+        # bounce ball off bottom or top
+if (self.ball.y < self.y) or (self.ball.top > self.top):
+            self.ball.velocity_y *= -1
+
+        # went of to a side to score point?
+if self.ball.x < self.x:
+            self.player2.score += 1
+            if self.player2.score == 10:
+                self.result = "Player 2 Wins!"
+                self.game_over = True
+                Clock.unschedule(self.update)
+            elif self.player1.score == 10:
+                self.result = "Player 1 Wins!"
+                self.game_over = True
+                Clock.unschedule(self.update)
+            if not self.game_over:
+                self.serve_ball(vel=(4, 0))
+if self.ball.x > self.width:
+            self.player1.score += 1
+            if self.player2.score == 10:
+                self.result = "Player 2 Wins!"
+                self.game_over = True
+                Clock.unschedule(self.update)
+            elif self.player1.score == 10:
+                self.result = "Player 1 Wins!"
+                self.game_over = True
+                Clock.unschedule(self.update)
+            if not self.game_over:
+                self.serve_ball(vel=(-4, 0))
+                  
+
+def on_touch_move(self, touch):
+        if touch.x < self.width / 3:
             self.player1.center_y = touch.y
-        if touch.x > self.width * 3 / 4:
+        if touch.x > self.width - self.width / 3:
             self.player2.center_y = touch.y
 
-
+	
 class PongApp(App):
+    event = None
     def build(self):
         game = PongGame()
         game.serve_ball()
-        Clock.schedule_interval(game.update, 1.0 / 60.0)
+        self.event = Clock.schedule_interval(game.update, 1.0 / 60.0)
         return game
 
 
 if __name__ == '__main__':
-    PongApp().run()
+    app = PongApp()
+    app.run()
