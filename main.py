@@ -1,183 +1,266 @@
-from kivy.app import App
-from kivy.uix.widget import Widget
-from kivy.properties import NumericProperty, ReferenceListProperty,\
-    ObjectProperty, StringProperty
-from kivy.vector import Vector
-from kivy.clock import Clock
-from kivy.core.window import Window
-from time import sleep
-import sys
+import tkinter as tk
 
-#pyuserinput is not required, as well as not working with kivy code in python 3.4
-"""
-try:
-    from pykeyboard import PyKeyboard
-except ImportError:
-    sys.exit("You need to install pykeyboard. Install it by running 'pip install pyuserinput'")
+class Game(tk.Frame):
+  
+    def __init__(self, master):
+       
+        tk.Frame.__init__(self, master)
+        self.lives = 3
+        self.width = 610
+        self.height = 400
+       
+        self.canvas = tk.Canvas(self, bg='#aaaaff', width=self.width,
+                                height=self.height)
 
-kb = PyKeyboard()"""
-auto_mode = 1
+       
+        self.canvas.pack()
+        self.pack()
 
-class PongPaddle(Widget):
-    score = NumericProperty(0)
+        self.items = {}
+        self.ball = None
+        self._paddle_y_start = 326
+        self.paddle = Paddle(self.canvas, self.width / 2, self._paddle_y_start)
 
-    def bounce_ball(self, ball):
-        if self.collide_widget(ball):
-            vx, vy = ball.velocity
-            offset = (ball.center_y - self.center_y) / (self.height / 2)
-            bounced = Vector(-1 * vx, vy)
-            vel = bounced * 1.1
-            ball.velocity = vel.x, vel.y + offset
+       
+        self.items[self.paddle.item] = self.paddle
 
-class PongBall(Widget):
-    velocity_x = NumericProperty(0)
-    velocity_y = NumericProperty(0)
-    velocity = ReferenceListProperty(velocity_x, velocity_y)
+       
+        for x in range(5, self.width - 5, 75):  
+            self.add_brick(x + 37.5, 50, 2)
+            self.add_brick(x + 37.5, 70, 1)
+            self.add_brick(x + 37.5, 90, 1)
+            self.add_brick(x + 37.5, 110, 1)
 
-    def move(self):
-        self.pos = Vector(*self.velocity) + self.pos
+        self.hud = None
 
+      
+        self.setup_game()
 
-class PongGame(Widget):
-    game_over = False
-    result = StringProperty('')
-    ball = ObjectProperty(None)
-    player1 = ObjectProperty(None)
-    player2 = ObjectProperty(None)
-    motion = 10
+       
+        self.canvas.focus_set()  
+
+        self.canvas.bind('<Left>', lambda _: self.paddle.move(-10))
+        self.canvas.bind('<Right>', lambda _: self.paddle.move(10))
+
+    def setup_game(self):
+  
+        self.add_ball()
+        self.update_lives_text()
+        self.text = self.draw_text(300, 200, "Press Spacebar to start")
+
+        self.canvas.bind('<space>', lambda _: self.start_game())
+
+    def add_ball(self):
+
+        if self.ball is not None:
+            self.ball.delete()
+        paddle_coords = self.paddle.get_position()
+
+        x = (paddle_coords[0] + paddle_coords[2]) * 0.5
+        self.ball = Ball(self.canvas, x, 310)
+        self.paddle.set_ball(self.ball)  
+
+    def add_brick(self, x, y, hits):
     
-    def __init__(self, **kwargs):
-        super(PongGame, self).__init__(**kwargs)
-        self._keyboard = Window.request_keyboard(self._keyboard_closed, self)
-        self._keyboard.bind(on_key_down = self._on_keyboard_down)
-        self._keyboard.bind(on_key_up = self._on_keyboard_up)
-
-    def _keyboard_closed(self):
-        self._keyboard.unbind(on_key_down = self._on_keyboard_down)
-        self._keyboard.unbind(on_key_up = self._on_keyboard_up)
-        self._keyboard = None
-
-    def _on_keyboard_down(self, keyboard, keycode, text, modifiers):
-        if keycode[1] == 'w':
-            self.player1.center_y += self.motion
-            self.motion += 2
-            if self.player1.center_y > self.height:
-                self.player1.center_y = self.height
-        if keycode[1] == "s":
-            self.player1.center_y -= self.motion
-            self.motion += 2
-            if self.player1.center_y < 0:
-                self.player1.center_y = 0
-        if keycode[1] == "up":
-            self.player2.center_y += self.motion
-            self.motion += 2
-            if self.player2.center_y > self.height:
-                self.player2.center_y = self.height
-        if keycode[1] == "down":
-            self.player2.center_y -= self.motion
-            self.motion += 2
-            if self.player2.center_y < 0:
-                self.player2.center_y = 0
-        return True
-
-    def _on_keyboard_up(self, keyboard, keycode):
-	    self.motion = 10
-        return True
 
 
-    def serve_ball(self, vel=(4, 0)):
-        self.ball.center = self.center
-        self.ball.velocity = vel
-        sleep(0.1)
+        brick = Brick(self.canvas, x, y, hits)
+       
+        self.items[brick.item] = brick
 
-    def update(self,dt):
-        self.ball.move()
+    def draw_text(self, x, y, text, size='40'):
+  
+        font = ('Helvetica', size)
+        return self.canvas.create_text(x, y, text=text, font=font)
 
-        # bounce of paddles
-        self.player1.bounce_ball(self.ball)
-        self.player2.bounce_ball(self.ball)
+    def update_lives_text(self):
 
-        """if (auto_mode == 1 and self.ball.velocity_x > 0 and abs(self.player1.center_y - self.height//2) > 10):
-            if (self.player1.center_y < self.height//2):
-                self.player1.center_y += self.motion
-                self.motion += 2
-                if self.player1.center_y > self.height:
-                        self.player1.center_y = self.height
-                #kb.press_key('w')
-                #kb.release_key('w')
+        text = "Lives: {}".format(self.lives)
+        if self.hud is None:
+            self.hud = self.draw_text(50, 20, text, 15)
+        else:
+            self.canvas.itemconfig(self.hud, text=text)
+
+    def start_game(self):
+ 
+        self.canvas.unbind('<space>')
+        self.canvas.delete(self.text)
+        self.paddle.ball = None
+        self.game_loop()
+
+    def game_loop(self):
+    
+        self.check_collisions()
+  
+        num_bricks = len(self.canvas.find_withtag('brick'))
+        if num_bricks == 0:
+            self.ball.speed = None
+            self.draw_text(300, 200, "You've won!")
+        elif self.ball.get_position()[3] >= self.height:
+           
+            self.ball.speed = None
+            self.lives -= 1
+            if self.lives < 0:
+                self.draw_text(300, 200, "Game Over")
             else:
-                self.player1.center_y -= self.motion
-                self.motion += 2
-                if self.player1.center_y < 0:
-                        self.player1.center_y = 0
-                #kb.press_key('s')
-                #kb.release_key('s')"""
+                self.after(1000, self.setup_game)
+        else:
+            self.ball.update()  
+      
+            self.after(50, self.game_loop)
 
-    if (auto_mode == 1 and self.ball.velocity_x < 0):
-            if(abs(self.player1.center_y - self.ball.center_y) > 10):
-                if (self.player1.center_y < self.ball.center_y):
-                    self.player1.center_y += self.motion
-                    self.motion += 2
-    if self.player1.center_y > self.height: # checking if paddle goes above max height
-                        self.player1.center_y = self.height
-                    #kb.press_key('w')
-                    #kb.release_key('w')
-    else:
-		    self.player1.center_y -= self.motion
-self.motion += 2
-if self.player1.center_y < 0: # if paddle goes below zero
-                        self.player1.center_y = 0
-                    #kb.press_key('s')
-                    #kb.release_key('s')
+    def check_collisions(self):
+      
 
 
-        # bounce ball off bottom or top
-if (self.ball.y < self.y) or (self.ball.top > self.top):
-            self.ball.velocity_y *= -1
-
-        # went of to a side to score point?
-if self.ball.x < self.x:
-            self.player2.score += 1
-            if self.player2.score == 10:
-                self.result = "Player 2 Wins!"
-                self.game_over = True
-                Clock.unschedule(self.update)
-            elif self.player1.score == 10:
-                self.result = "Player 1 Wins!"
-                self.game_over = True
-                Clock.unschedule(self.update)
-            if not self.game_over:
-                self.serve_ball(vel=(4, 0))
-if self.ball.x > self.width:
-            self.player1.score += 1
-            if self.player2.score == 10:
-                self.result = "Player 2 Wins!"
-                self.game_over = True
-                Clock.unschedule(self.update)
-            elif self.player1.score == 10:
-                self.result = "Player 1 Wins!"
-                self.game_over = True
-                Clock.unschedule(self.update)
-            if not self.game_over:
-                self.serve_ball(vel=(-4, 0))
-                  
-
-def on_touch_move(self, touch):
-        if touch.x < self.width / 3:
-            self.player1.center_y = touch.y
-        if touch.x > self.width - self.width / 3:
-            self.player2.center_y = touch.y
-
-	
-class PongApp(App):
-    event = None
-    def build(self):
-        game = PongGame()
-        game.serve_ball()
-        self.event = Clock.schedule_interval(game.update, 1.0 / 60.0)
-        return game
+       
+        ball_coords = self.ball.get_position()
+        items = self.canvas.find_overlapping(*ball_coords) # list
+       
+        collideables = [self.items[x] for x in items if x in self.items]
+        self.ball.collide(collideables)
 
 
-if __name__ == '__main__':
-    app = PongApp()
-    app.run()
+class GameObject():
+    
+    def __init__(self, canvas, item):
+   
+        self.canvas = canvas
+        self.item = item
+
+    def get_position(self):
+     
+        return self.canvas.coords(self.item)
+
+    def move(self, x, y):
+        
+        self.canvas.move(self.item, x, y)
+
+    def delete(self):
+      
+        self.canvas.delete(self.item)
+
+
+class Ball(GameObject):
+ 
+    def __init__(self, canvas, x, y):
+        
+        self.radius = 10
+        self.direction = [1, -1]  
+        self.speed = 10
+
+    
+        item = canvas.create_oval(x - self.radius, y - self.radius,
+                                  x + self.radius, y + self.radius,
+                                  fill='white')
+        
+        GameObject.__init__(self, canvas, item)
+
+    def update(self):
+        
+
+ 
+        ball_coords = self.get_position()
+        width = self.canvas.winfo_width()
+
+        if ball_coords[0] <= 0 or ball_coords[2] >= width:
+            self.direction[0] *= -1  
+        if ball_coords[1] <= 0:
+            self.direction[1] *= -1  
+        x = self.direction[0] * self.speed  
+        y = self.direction[1] * self.speed
+        self.move(x, y) 
+
+
+    def collide(self, game_objects):
+
+        ball_coords = self.get_position()
+        ball_center_x = (ball_coords[0] + ball_coords[2]) * 0.5  
+
+        if len(game_objects) > 1: 
+            self.direction[1] *= -1
+        elif len(game_objects) == 1:  
+            game_object = game_objects[0]
+            coords = game_object.get_position()
+            if ball_center_x > coords[2]:
+                self.direction[0] = 1
+            elif ball_center_x < coords[0]:
+                self.direction[0] = -1
+            else:
+                self.direction[1] *= -1
+       
+        for game_object in game_objects:
+            if isinstance(game_object, Brick):
+                game_object.hit() 
+
+
+class Paddle(GameObject):
+  
+    def __init__(self, canvas, x, y):
+      
+        self.width = 80
+        self.height = 10
+        self.ball = None
+
+      
+        item = canvas.create_rectangle(x - self.width / 2,
+                                       y - self.height / 2,
+                                       x + self.width / 2,
+                                       y + self.height / 2,
+                                       fill='blue')
+     
+        GameObject.__init__(self, canvas, item)
+
+    def set_ball(self, ball):
+       
+        self.ball = ball
+
+    def move(self, offset):
+       
+        coords = self.get_position()  
+        width = self.canvas.winfo_width()
+       
+        if coords[0] + offset >= 0 and coords[2] + offset <= width:
+            GameObject.move(self, offset, 0)  
+           
+            if self.ball is not None:
+                self.ball.move(offset, 0)  
+
+
+class Brick(GameObject):
+   
+    COLORS = {1: '#999999', 2: '#555555', 3: '#222222'}
+
+    def __init__(self, canvas, x, y, hits):
+       
+        self.width = 75
+        self.height = 20
+        self.hits = hits
+        color = Brick.COLORS[hits]
+
+    
+        item = canvas.create_rectangle(x - self.width / 2,
+                                       y - self.height / 2,
+                                       x + self.width / 2,
+                                       y + self.height / 2,
+                                       fill=color, tags='brick')
+       
+        GameObject.__init__(self, canvas, item)
+
+    def hit(self):
+       
+        self.hits -= 1
+        if self.hits == 0:
+            self.delete()  
+        else: 
+            self.canvas.itemconfig(self.item, fill=Brick.COLORS[self.hits])
+
+
+
+if __name__ == "__main__":
+   
+    ROOT = tk.Tk()
+    ROOT.title('Tkinter Breakout')
+   
+    GAME = Game(ROOT)
+    GAME.mainloop()
